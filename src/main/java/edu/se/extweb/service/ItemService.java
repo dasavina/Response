@@ -7,18 +7,21 @@ import edu.se.extweb.response.ApiResponse;
 import edu.se.extweb.response.BaseMetaData;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ItemService {
 
-    // імітація БД
     private final Map<String, Item> storage = new ConcurrentHashMap<>();
 
-    // ============================================================
-    // ======================= BASIC CRUD =========================
-    // ============================================================
+    // ================= TEST HELPER =================
+    public void clearAll() {
+        storage.clear();
+    }
+
+    // ================= CRUD =================
 
     public List<Item> getAll() {
         return new ArrayList<>(storage.values());
@@ -31,6 +34,7 @@ public class ItemService {
     public Item create(Item item) {
         String id = UUID.randomUUID().toString();
         item.setId(id);
+        item.setCreatedAt(LocalDateTime.now());
         storage.put(id, item);
         return item;
     }
@@ -44,17 +48,16 @@ public class ItemService {
     }
 
     public Item update(Item item) {
-        if (!storage.containsKey(item.getId())) {
-            return null;
-        }
+        if (item == null || item.getId() == null) return null;
+        if (!storage.containsKey(item.getId())) return null;
+
         storage.put(item.getId(), item);
         return item;
     }
 
     public Item update(ItemUpdateRequest request) {
-        if (!storage.containsKey(request.id())) {
-            return null;
-        }
+        if (request == null || request.id() == null) return null;
+        if (!storage.containsKey(request.id())) return null;
 
         Item item = storage.get(request.id());
         item.setName(request.name());
@@ -68,19 +71,21 @@ public class ItemService {
         storage.remove(id);
     }
 
-    // ============================================================
-    // =================== API RESPONSE LOGIC ======================
-    // ============================================================
+    // ================= API RESPONSE =================
 
     public ApiResponse<BaseMetaData, Item> getByIdAsApiResponse(String id) {
+
+        if (id == null || id.isBlank()) {
+            return buildError("Invalid id", 400);
+        }
 
         Item item = storage.get(id);
 
         if (item == null) {
-            return buildErrorResponse("Not found", 404);
+            return buildError("Not found", 404);
         }
 
-        return buildSuccessResponse(List.of(item));
+        return buildSuccess(List.of(item));
     }
 
     public ApiResponse<BaseMetaData, Item> getAllAsApiResponse() {
@@ -88,17 +93,20 @@ public class ItemService {
         List<Item> items = getAll();
 
         if (items.isEmpty()) {
-            return buildErrorResponse("List is empty", 404);
+            return buildError("List is empty", 404);
         }
 
-        return buildSuccessResponse(items);
+        return buildSuccess(items);
     }
 
     public ApiResponse<BaseMetaData, Item> createAsApiResponse(ItemCreateRequest request) {
 
-        Item created = create(request);
+        if (request == null) {
+            return buildError("Request is null", 400);
+        }
 
-        return buildSuccessResponse(List.of(created));
+        Item created = create(request);
+        return buildSuccess(List.of(created));
     }
 
     public ApiResponse<BaseMetaData, Item> updateAsApiResponse(ItemUpdateRequest request) {
@@ -106,33 +114,44 @@ public class ItemService {
         Item updated = update(request);
 
         if (updated == null) {
-            return buildErrorResponse("Item not found for update", 404);
+            return buildError("Item not found", 404);
         }
 
-        return buildSuccessResponse(List.of(updated));
+        return buildSuccess(List.of(updated));
     }
 
-    // ============================================================
-    // =================== HELPERS (TDD FRIENDLY) ==================
-    // ============================================================
+    public ApiResponse<BaseMetaData, Item> deleteAsApiResponse(String id) {
 
-    private ApiResponse<BaseMetaData, Item> buildSuccessResponse(List<Item> data) {
+        if (id == null || id.isBlank()) {
+            return buildError("Invalid id", 400);
+        }
 
+        Item item = storage.get(id);
+
+        if (item == null) {
+            return buildError("Item not found", 404);
+        }
+
+        storage.remove(id);
+
+        return buildSuccess(List.of(item));
+    }
+
+    // ================= HELPERS =================
+
+    private ApiResponse<BaseMetaData, Item> buildSuccess(List<Item> data) {
         BaseMetaData meta = new BaseMetaData();
         meta.setSuccess(true);
         meta.setCode(200);
         meta.setErrorMessage(null);
-
         return new ApiResponse<>(meta, data);
     }
 
-    private ApiResponse<BaseMetaData, Item> buildErrorResponse(String message, int code) {
-
+    private ApiResponse<BaseMetaData, Item> buildError(String message, int code) {
         BaseMetaData meta = new BaseMetaData();
         meta.setSuccess(false);
         meta.setCode(code);
         meta.setErrorMessage(message);
-
         return new ApiResponse<>(meta, new ArrayList<>());
     }
 }
